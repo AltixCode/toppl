@@ -17,9 +17,7 @@ import {
   swingX,
   type Block,
 } from '@/logic/stack';
-import { shouldShowInterstitial } from '@/monetization/adPolicy';
-import { shouldShowAds } from '@/monetization/entitlements';
-import { showInterstitial } from '@/monetization/interstitial';
+import { noteGameFinished } from '@/monetization/pacing';
 import { usePremiumStore } from '@/store/usePremiumStore';
 import { useStackStore } from '@/store/useStackStore';
 import { MIN_TOUCH_TARGET, useTheme, withAlpha } from '@/theme';
@@ -92,17 +90,7 @@ export default function Home() {
       setOver(true);
       record(stackRef.current.length - 1, perfectsRef.current);
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      if (
-        shouldShowAds({ isPremium, isReady }) &&
-        shouldShowInterstitial({
-          gamesPlayed: 1,
-          lastInterstitialAt: 0,
-          now: Date.now(),
-          adsRemoved: isPremium,
-        })
-      ) {
-        showInterstitial();
-      }
+      void noteGameFinished();
       return;
     }
 
