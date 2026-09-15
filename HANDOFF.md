@@ -17,8 +17,15 @@ a verification, and nothing stopped an unverified binary reaching a device.
 
 What has been established, each by checking rather than by reasoning:
 
-- A **Debug** build on a simulator launches and runs fine, so the fault is
-  release-only or device-only.
+- A **Debug** build on a simulator starts and evaluates its JS bundle. Stated
+  precisely, because the first version of this note overclaimed it: what was
+  verified is a live process and `evaluateJavaScript() with JS bundle` in the
+  console. **Nobody looked at a frame.** An app can hold a pid and render
+  nothing but its splash — that exact failure was mistaken for a hang on
+  another app the same evening — so this makes "Debug gets further than
+  Release" likely, not established. It does at least rule out the stale-Metro
+  trap: port 8081 was occupied, so the run used 8083 and the bundle it
+  evaluated was this app's real code rather than a ConfigError.
 - Dependencies are identical across all six apps built that evening, and
   `app.config.ts` matches a known-good app apart from colours.
 - The screen tests pass under RNTL, so it is not a plain render error.
