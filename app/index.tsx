@@ -18,6 +18,7 @@ import {
   type Block,
 } from '@/logic/stack';
 import { noteGameFinished } from '@/monetization/pacing';
+import { isRewardedReady, preloadRewarded, showRewarded } from '@/monetization/rewarded';
 import { usePremiumStore } from '@/store/usePremiumStore';
 import { useStackStore } from '@/store/useStackStore';
 import { MIN_TOUCH_TARGET, useTheme, withAlpha } from '@/theme';
@@ -51,6 +52,12 @@ export default function Home() {
   const [elapsed, setElapsed] = useState(0);
   // Measured, so the playfield uses the space it is given rather than a cap.
   const [fieldWidth, setFieldWidth] = useState(0);
+  // The one-per-run rewarded continue: offered at most once, and only when an
+  // ad is actually loaded -- a prompt for a reward the app cannot deliver is
+  // worse than no prompt at all.
+  const [deciding, setDeciding] = useState(false);
+  const [watchingAd, setWatchingAd] = useState(false);
+  const continueOfferedRef = useRef(false);
 
   const startedAt = useRef(0);
   const stackRef = useRef<Block[]>([]);
@@ -79,8 +86,43 @@ export default function Home() {
     startedAt.current = Date.now();
     setElapsed(0);
     setOver(false);
+    setDeciding(false);
+    continueOfferedRef.current = false;
     setPlaying(true);
+    // Loading takes a few seconds, so start it now rather than at the moment
+    // of the bust, when it is almost certainly not ready yet.
+    preloadRewarded();
   }, [fieldWidth]);
+
+  const finishRun = useCallback(() => {
+    setDeciding(false);
+    setOver(true);
+    record(stackRef.current.length - 1, perfectsRef.current);
+    void noteGameFinished();
+  }, [record]);
+
+  const declineContinue = useCallback(() => {
+    continueOfferedRef.current = true;
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    finishRun();
+  }, [finishRun]);
+
+  const watchAdToContinue = useCallback(async () => {
+    continueOfferedRef.current = true;
+    setWatchingAd(true);
+    const earned = await showRewarded();
+    setWatchingAd(false);
+    if (!earned) {
+      finishRun();
+      return;
+    }
+    // Resume on the same stack -- the miss that triggered this never gets
+    // added, so the player is back exactly where the bust happened.
+    setDeciding(false);
+    startedAt.current = Date.now();
+    setElapsed(0);
+    setPlaying(true);
+  }, [finishRun]);
 
   const place = () => {
     if (!playing) return;
@@ -88,10 +130,15 @@ export default function Home() {
     const result = drop({ x: movingX, width: below.width }, below);
 
     if (isGameOver(result.block)) {
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      if (!continueOfferedRef.current && isRewardedReady()) {
+        setPlaying(false);
+        setDeciding(true);
+        return;
+      }
       setPlaying(false);
       setOver(true);
       record(stackRef.current.length - 1, perfectsRef.current);
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       void noteGameFinished();
       return;
     }
@@ -200,12 +247,30 @@ export default function Home() {
           ))}
           {playing ? null : (
             <Text variant="body" tone="muted">
-              {over ? t('gameOverTitle') : t('tapToDrop')}
+              {deciding ? t('continuePrompt') : over ? t('gameOverTitle') : t('tapToDrop')}
             </Text>
           )}
         </Pressable>
 
-        {playing ? null : (
+        {deciding ? (
+          <View style={[styles.chipRow, { gap: spacing.sm }]}>
+            <Button
+              label={t('watchAdCta')}
+              icon="play-circle"
+              style={styles.grow}
+              loading={watchingAd}
+              disabled={watchingAd}
+              onPress={() => void watchAdToContinue()}
+            />
+            <Button
+              label={t('endRunCta')}
+              variant="secondary"
+              style={styles.grow}
+              disabled={watchingAd}
+              onPress={declineContinue}
+            />
+          </View>
+        ) : playing ? null : (
           <Button label={over ? t('againCta') : t('startCta')} icon="layers" onPress={start} />
         )}
 
