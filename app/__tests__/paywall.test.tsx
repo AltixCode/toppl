@@ -68,11 +68,19 @@ describe('Paywall', () => {
     expect(getByText(t('feat1Desc'))).toBeTruthy();
   });
 
+  // The letter closes with a short sign-off line right before the buy
+  // button — distinct from the CTA itself and from the longer promise
+  // sentence woven into the body paragraph above it.
+  it('signs off with a short line before the purchase button', async () => {
+    const { getByText } = await renderWithProviders(<Paywall />);
+    expect(getByText(t('antiSubTitle'))).toBeTruthy();
+  });
+
   // Asserting on `feat4Desc` here would encode the template's shape rather than
   // this app's claims, and would fail against any honest rewrite that has
   // fewer than four things to say. What matters is that a blank claim is not
-  // rendered as an empty row.
-  it('renders no row for a claim this app does not make', async () => {
+  // woven into the prose as an empty clause.
+  it('weaves in no clause for a claim this app does not make', async () => {
     const { queryByText } = await renderWithProviders(<Paywall />);
     expect(queryByText('')).toBeNull();
   });
@@ -95,6 +103,17 @@ describe('Paywall', () => {
     const { getByText } = await renderWithProviders(<Paywall />);
     await fireEvent.press(getByText(t('restorePurchases')));
     expect(restore).toHaveBeenCalled();
+  });
+
+  // A restore that finds nothing must SAY so, not render nothing at all —
+  // App Review taps Restore on every submission, and a silent no-op reads
+  // as a broken button.
+  it('tells a fresh install there was nothing to restore', async () => {
+    const restore = jest.fn().mockResolvedValue('none');
+    seed({ restore });
+    const { getByText, findByText } = await renderWithProviders(<Paywall />);
+    await fireEvent.press(getByText(t('restorePurchases')));
+    expect(await findByText(t('noPriorPurchases'))).toBeTruthy();
   });
 
   it('closes on the close control', async () => {
@@ -121,23 +140,37 @@ describe('Paywall', () => {
 
 describe('when the store has nothing to sell', () => {
   it('says the store is unreachable rather than spinning forever', async () => {
-    usePremiumStore.setState({ lifetime: null, offeringsResolved: true, isPremium: false, isReady: true });
+    usePremiumStore.setState({
+      lifetime: null,
+      offeringsResolved: true,
+      isPremium: false,
+      isReady: true,
+    });
     const { getByText, queryByText } = await renderWithProviders(<Paywall />);
     expect(getByText(t('storeUnavailable'))).toBeTruthy();
     expect(queryByText(t('loadingPrice'))).toBeNull();
   });
 
   it('still offers Restore, so a user who already paid is not stranded', async () => {
-    usePremiumStore.setState({ lifetime: null, offeringsResolved: true, isPremium: false, isReady: true });
+    usePremiumStore.setState({
+      lifetime: null,
+      offeringsResolved: true,
+      isPremium: false,
+      isReady: true,
+    });
     const { getByText } = await renderWithProviders(<Paywall />);
     expect(getByText(t('restorePurchases'))).toBeTruthy();
   });
 
   it('shows the spinner only while the lookup is genuinely still running', async () => {
-    usePremiumStore.setState({ lifetime: null, offeringsResolved: false, isPremium: false, isReady: true });
+    usePremiumStore.setState({
+      lifetime: null,
+      offeringsResolved: false,
+      isPremium: false,
+      isReady: true,
+    });
     const { getByText, queryByText } = await renderWithProviders(<Paywall />);
     expect(getByText(t('loadingPrice'))).toBeTruthy();
     expect(queryByText(t('storeUnavailable'))).toBeNull();
   });
 });
-

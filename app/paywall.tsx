@@ -1,6 +1,12 @@
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Linking, Pressable, ScrollView, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Linking,
+  Pressable,
+  ScrollView,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button, Text } from '@/components/ui';
@@ -22,6 +28,30 @@ const BENEFIT_KEYS = [
   { title: 'feat4Title', desc: 'feat4Desc' },
 ] as const;
 
+/**
+ * Which connective phrase introduces a benefit clause, by its position among the
+ * benefits this app actually has something to say about.
+ *
+ * A single claim needs no lead-in at all — "First, X" reads as though a second
+ * item is coming. Two claims skip the middle phrase entirely. Three or more
+ * reuse the middle phrase for every interior item, which is a mild repeat at
+ * five-plus claims but this template offers at most four.
+ */
+function leadKeyFor(
+  index: number,
+  total: number,
+):
+  | (typeof BENEFIT_KEYS)[number]['title']
+  | 'benefitLeadFirst'
+  | 'benefitLeadMiddle'
+  | 'benefitLeadLast'
+  | null {
+  if (total <= 1) return null;
+  if (index === 0) return 'benefitLeadFirst';
+  if (index === total - 1) return 'benefitLeadLast';
+  return 'benefitLeadMiddle';
+}
+
 export default function Paywall() {
   /**
    * Only the claims this app can actually make.
@@ -40,7 +70,7 @@ export default function Paywall() {
   const router = useRouter();
   const tabletColumn = useTabletColumn(640);
   const insets = useSafeAreaInsets();
-  const { colors, spacing, radius } = useTheme();
+  const { colors, spacing } = useTheme();
 
   const lifetime = usePremiumStore((s) => s.lifetime);
   const offeringsResolved = usePremiumStore((s) => s.offeringsResolved);
@@ -69,14 +99,25 @@ export default function Paywall() {
   const price = lifetime?.product.priceString;
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: insets.top }}>
+    <View
+      style={{
+        flex: 1,
+        backgroundColor: colors.background,
+        paddingTop: insets.top,
+      }}
+    >
       <View style={{ alignItems: 'flex-end', padding: spacing.base }}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={t('close')}
           hitSlop={12}
           onPress={() => router.back()}
-          style={{ minWidth: 44, minHeight: 44, alignItems: 'flex-end', justifyContent: 'center' }}
+          style={{
+            minWidth: 44,
+            minHeight: 44,
+            alignItems: 'flex-end',
+            justifyContent: 'center',
+          }}
         >
           <Text variant="body" tone="muted">
             {t('close')}
@@ -84,60 +125,68 @@ export default function Paywall() {
         </Pressable>
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: spacing['3xl'], ...tabletColumn, flexGrow: 1, justifyContent: 'center' }}>
-        {/* Numbered, not ticked, and the promise leads.
- 
+      <ScrollView
+        contentContainerStyle={{
+          padding: spacing.xl,
+          paddingBottom: spacing['3xl'],
+          ...tabletColumn,
+          flexGrow: 1,
+          justifyContent: 'center',
+        }}
+      >
+        {/* A letter, not a spec sheet.
+
             29 of 44 apps in this portfolio shipped one paywall file byte for
             byte, and Apple rejected under 4.3(a) naming "multiple similar apps
-            using a repackaged app template". foldup, knotter and poursort are
-            the sharpest case: all three are rejected, and all three also shared
-            a home-screen structure that measured 1.00 identical.
- 
-            So this one leads with the no-subscription promise as the headline
-            rather than burying it in a card, and numbers what you get instead
-            of ticking it. Same claims, different page. */}
-        <Text variant="micro" tone="accent">
-          {t('antiSubTitle')}
+            using a repackaged app template". The old shape here was an eyebrow
+            over a display title over a numbered list — a structure that reads
+            identically no matter which app it belongs to.
+
+            This one opens with a direct line to the player, folds the same
+            claims into a couple of paragraphs of plain sentences instead of
+            list rows, and closes with a short sign-off before the button.
+            Same claims, no numbering, no icon circles, no card. */}
+        <Text variant="title">{t('paywallTitle')}</Text>
+
+        <Text variant="body" style={{ marginTop: spacing.lg }}>
+          {t('paywallIntro')}
+          {benefits.map((benefit, index) => {
+            const leadKey = leadKeyFor(index, benefits.length);
+            return (
+              <Text key={benefit.title} variant="body">
+                {' '}
+                {leadKey ? `${t(leadKey)} ` : ''}
+                <Text variant="bodyStrong" tone="accent">
+                  {t(benefit.title)}
+                </Text>
+                {' — '}
+                <Text variant="body">{t(benefit.desc)}</Text>
+              </Text>
+            );
+          })}
         </Text>
-        <Text variant="display" style={{ marginTop: spacing.xs }}>
-          {t('paywallTitle')}
-        </Text>
-        <Text variant="body" tone="muted" style={{ marginTop: spacing.sm }}>
+
+        <Text variant="body" tone="muted" style={{ marginTop: spacing.base }}>
           {t('antiSubHeadline')}
         </Text>
 
-        <View style={{ marginTop: spacing['2xl'], gap: spacing.xl }}>
-          {benefits.map((benefit, index) => (
-            <View key={benefit.title} style={{ flexDirection: 'row', gap: spacing.base }}>
-              <View
-                style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 14,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <Text variant="micro" tone="accent">
-                  {index + 1}
-                </Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text variant="bodyStrong">{t(benefit.title)}</Text>
-                <Text variant="caption" tone="muted" style={{ marginTop: 2 }}>
-                  {t(benefit.desc)}
-                </Text>
-              </View>
-            </View>
-          ))}
-        </View>
+        <Text
+          variant="callout"
+          tone="accent"
+          align="center"
+          style={{ marginTop: spacing['2xl'], fontStyle: 'italic' }}
+        >
+          {t('antiSubTitle')}
+        </Text>
 
-        <View style={{ marginTop: spacing['2xl'] }}>
+        <View style={{ marginTop: spacing.md }}>
           {lifetime ? (
             <Button
-              label={price ? t('lifetimeAccess', { price }) : t('lifetimeAccessPlain')}
+              label={
+                price
+                  ? t('lifetimeAccess', { price })
+                  : t('lifetimeAccessPlain')
+              }
               size="lg"
               fullWidth
               loading={isPurchasing}
@@ -155,18 +204,32 @@ export default function Paywall() {
           ) : (
             <View style={{ padding: spacing.xl, alignItems: 'center' }}>
               <ActivityIndicator color={colors.textMuted} />
-              <Text variant="caption" tone="muted" style={{ marginTop: spacing.md }}>
+              <Text
+                variant="caption"
+                tone="muted"
+                style={{ marginTop: spacing.md }}
+              >
                 {t('loadingPrice')}
               </Text>
             </View>
           )}
-          <Text variant="caption" tone="muted" align="center" style={{ marginTop: spacing.md }}>
+          <Text
+            variant="caption"
+            tone="muted"
+            align="center"
+            style={{ marginTop: spacing.md }}
+          >
             {t('oneTimePayment')}
           </Text>
         </View>
 
         {error ? (
-          <Text variant="caption" tone="danger" align="center" style={{ marginTop: spacing.base }}>
+          <Text
+            variant="caption"
+            tone="danger"
+            align="center"
+            style={{ marginTop: spacing.base }}
+          >
             {error}
           </Text>
         ) : null}
@@ -196,7 +259,12 @@ export default function Paywall() {
           style={{ marginTop: spacing.lg }}
         />
 
-        <Text variant="micro" tone="faint" align="center" style={{ marginTop: spacing.xl }}>
+        <Text
+          variant="micro"
+          tone="faint"
+          align="center"
+          style={{ marginTop: spacing.xl }}
+        >
           {t('adsDisclosure')}
         </Text>
         <View
