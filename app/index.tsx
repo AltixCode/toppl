@@ -1,13 +1,14 @@
-import Feather from '@expo/vector-icons/Feather';
-import * as Haptics from 'expo-haptics';
-import { useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Feather from "@expo/vector-icons/Feather";
+import * as Haptics from "expo-haptics";
+import { useRouter } from "expo-router";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { BannerAdSlot } from '@/components/BannerAdSlot';
-import { Button, Card, Text } from '@/components/ui';
-import { t, type TranslationKey } from '@/i18n';
+import { BannerAdSlot } from "@/components/BannerAdSlot";
+import { Button, Card, Text } from "@/components/ui";
+import { useSoundEffects } from "@/hooks/useSoundEffects";
+import { t, type TranslationKey } from "@/i18n";
 import {
   FREE_RUNS,
   START_WIDTH,
@@ -16,17 +17,28 @@ import {
   speedForHeight,
   swingX,
   type Block,
-} from '@/logic/stack';
-import { noteGameFinished } from '@/monetization/pacing';
-import { isRewardedReady, preloadRewarded, showRewarded } from '@/monetization/rewarded';
-import { usePremiumStore } from '@/store/usePremiumStore';
-import { useStackStore } from '@/store/useStackStore';
-import { MIN_TOUCH_TARGET, useTheme, withAlpha } from '@/theme';
-import { useTabletColumn } from '@/theme/useTabletColumn';
-import { PALETTES, blockColour, canUsePalette } from '@/theme/palettes';
+} from "@/logic/stack";
+import { noteGameFinished } from "@/monetization/pacing";
+import {
+  isRewardedReady,
+  preloadRewarded,
+  showRewarded,
+} from "@/monetization/rewarded";
+import { usePremiumStore } from "@/store/usePremiumStore";
+import { useStackStore } from "@/store/useStackStore";
+import { MIN_TOUCH_TARGET, useTheme, withAlpha } from "@/theme";
+import { useTabletColumn } from "@/theme/useTabletColumn";
+import { PALETTES, blockColour, canUsePalette } from "@/theme/palettes";
 
-/** Visible rows of stack. Older blocks scroll off the bottom. */
-const VISIBLE_ROWS = 9;
+/**
+ * Visible rows of stack. Older blocks scroll off the bottom.
+ *
+ * Raised from 9 -- a TestFlight tester asked for more of the stack to be
+ * visible during play, since the whole point of the game is watching a
+ * vertical tower grow. The field's height is derived from this count, so
+ * widening it is a one-line change; nothing else sizes off the old value.
+ */
+const VISIBLE_ROWS = 12;
 const ROW_HEIGHT = 26;
 const FRAME_MS = 16;
 
@@ -35,6 +47,7 @@ export default function Home() {
   const insets = useSafeAreaInsets();
   const { colors, spacing, radius } = useTheme();
   const tabletColumn = useTabletColumn();
+  const playSound = useSoundEffects();
 
   const isPremium = usePremiumStore((s) => s.isPremium);
   const isReady = usePremiumStore((s) => s.isReady);
@@ -69,16 +82,23 @@ export default function Home() {
 
   useEffect(() => {
     if (!playing) return;
-    const id = setInterval(() => setElapsed(Date.now() - startedAt.current), FRAME_MS);
+    const id = setInterval(
+      () => setElapsed(Date.now() - startedAt.current),
+      FRAME_MS,
+    );
     return () => clearInterval(id);
   }, [playing]);
 
   const top = stack[stack.length - 1] ?? { x: 0, width: START_WIDTH };
   const speed = speedForHeight(stack.length);
-  const movingX = fieldWidth > 0 ? swingX(elapsed, fieldWidth, top.width, speed) : 0;
+  const movingX =
+    fieldWidth > 0 ? swingX(elapsed, fieldWidth, top.width, speed) : 0;
 
   const start = useCallback(() => {
-    const first: Block = { x: Math.max(0, (fieldWidth - START_WIDTH) / 2), width: START_WIDTH };
+    const first: Block = {
+      x: Math.max(0, (fieldWidth - START_WIDTH) / 2),
+      width: START_WIDTH,
+    };
     stackRef.current = [first];
     perfectsRef.current = 0;
     setStack([first]);
@@ -130,6 +150,7 @@ export default function Home() {
     const result = drop({ x: movingX, width: below.width }, below);
 
     if (isGameOver(result.block)) {
+      playSound("fail");
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
       if (!continueOfferedRef.current && isRewardedReady()) {
         setPlaying(false);
@@ -148,8 +169,10 @@ export default function Home() {
     if (result.perfect) {
       perfectsRef.current += 1;
       setPerfects(perfectsRef.current);
+      playSound("pop");
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     } else {
+      playSound("tap");
       void Haptics.selectionAsync();
     }
     startedAt.current = Date.now();
@@ -157,7 +180,7 @@ export default function Home() {
   };
 
   const pickPalette = (id: string) => {
-    if (choosePalette(id, isPremium) === 'locked') router.push('/paywall');
+    if (choosePalette(id, isPremium) === "locked") router.push("/paywall");
   };
 
   const height = Math.max(0, stack.length - 1);
@@ -173,19 +196,19 @@ export default function Home() {
           paddingHorizontal: spacing.base,
           paddingBottom: spacing.xl,
           gap: spacing.base,
-        
+
           ...tabletColumn,
         }}
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.titleRow}>
           <Text variant="title" style={styles.grow}>
-            {t('appName')}
+            {t("appName")}
           </Text>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={t('settingsTitle')}
-            onPress={() => router.push('/settings')}
+            accessibilityLabel={t("settingsTitle")}
+            onPress={() => router.push("/settings")}
             hitSlop={8}
             style={styles.iconSlot}
           >
@@ -195,12 +218,12 @@ export default function Home() {
 
         <Text variant="display">{height}</Text>
         <Text variant="caption" tone="muted">
-          {t('bestLabel', { n: best() })} · {t('perfectsLabel')}: {perfects}
+          {t("bestLabel", { n: best() })} · {t("perfectsLabel")}: {perfects}
         </Text>
 
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={t('tapToDrop')}
+          accessibilityLabel={t("tapToDrop")}
           disabled={!playing}
           onPress={place}
           onLayout={(e) => setFieldWidth(e.nativeEvent.layout.width)}
@@ -240,14 +263,38 @@ export default function Home() {
                   width: block.width,
                   height: ROW_HEIGHT - 2,
                   borderRadius: radius.sm,
-                  backgroundColor: blockColour(paletteId, stack.length - visible.length + i),
+                  backgroundColor: blockColour(
+                    paletteId,
+                    stack.length - visible.length + i,
+                  ),
                 },
               ]}
             />
           ))}
-          {playing ? null : (
+          {playing ? null : deciding ? (
             <Text variant="body" tone="muted">
-              {deciding ? t('continuePrompt') : over ? t('gameOverTitle') : t('tapToDrop')}
+              {t("continuePrompt")}
+            </Text>
+          ) : over ? (
+            <View
+              style={[
+                styles.gameOverBox,
+                {
+                  borderRadius: radius.md,
+                  backgroundColor: colors.surface,
+                  borderColor: colors.danger,
+                  paddingVertical: spacing.sm,
+                  paddingHorizontal: spacing.base,
+                },
+              ]}
+            >
+              <Text variant="heading" tone="danger" align="center">
+                {t("gameOverTitle")}
+              </Text>
+            </View>
+          ) : (
+            <Text variant="body" tone="muted">
+              {t("tapToDrop")}
             </Text>
           )}
         </Pressable>
@@ -255,7 +302,7 @@ export default function Home() {
         {deciding ? (
           <View style={[styles.chipRow, { gap: spacing.sm }]}>
             <Button
-              label={t('watchAdCta')}
+              label={t("watchAdCta")}
               icon="play-circle"
               style={styles.grow}
               loading={watchingAd}
@@ -263,7 +310,7 @@ export default function Home() {
               onPress={() => void watchAdToContinue()}
             />
             <Button
-              label={t('endRunCta')}
+              label={t("endRunCta")}
               variant="secondary"
               style={styles.grow}
               disabled={watchingAd}
@@ -271,11 +318,15 @@ export default function Home() {
             />
           </View>
         ) : playing ? null : (
-          <Button label={over ? t('againCta') : t('startCta')} icon="layers" onPress={start} />
+          <Button
+            label={over ? t("againCta") : t("startCta")}
+            icon="layers"
+            onPress={start}
+          />
         )}
 
         <Text variant="heading" style={{ marginTop: spacing.base }}>
-          {t('paletteTitle')}
+          {t("paletteTitle")}
         </Text>
         <View style={[styles.chipRow, { gap: spacing.sm }]}>
           {PALETTES.map((palette) => {
@@ -286,7 +337,9 @@ export default function Home() {
               <Pressable
                 key={palette.id}
                 accessibilityRole="button"
-                accessibilityLabel={allowed ? name : t('paletteLocked', { name })}
+                accessibilityLabel={
+                  allowed ? name : t("paletteLocked", { name })
+                }
                 accessibilityState={{ selected: chosen, disabled: !allowed }}
                 onPress={() => pickPalette(palette.id)}
                 style={[
@@ -296,35 +349,39 @@ export default function Home() {
                     paddingHorizontal: spacing.base,
                     borderWidth: StyleSheet.hairlineWidth,
                     borderColor: chosen ? colors.accent : colors.border,
-                    backgroundColor: chosen ? withAlpha(colors.accent, 0.16) : colors.surface,
+                    backgroundColor: chosen
+                      ? withAlpha(colors.accent, 0.16)
+                      : colors.surface,
                   },
                 ]}
               >
                 {/* Full contrast whether locked or not; the lock icon and the
                     accessible label carry the state. */}
                 <Text variant="body">{name}</Text>
-                {allowed ? null : <Feather name="lock" size={14} color={colors.textMuted} />}
+                {allowed ? null : (
+                  <Feather name="lock" size={14} color={colors.textMuted} />
+                )}
               </Pressable>
             );
           })}
         </View>
 
         <Text variant="heading" style={{ marginTop: spacing.base }}>
-          {t('runsTitle')}
+          {t("runsTitle")}
         </Text>
         {rows.length === 0 ? (
           <Text variant="body" tone="muted">
-            {t('noRuns')}
+            {t("noRuns")}
           </Text>
         ) : (
           rows.slice(0, 10).map((run) => (
             <Card key={run.at}>
               <View style={styles.row}>
                 <Text variant="body" style={styles.grow}>
-                  {t('heightLabel')}: {run.height}
+                  {t("heightLabel")}: {run.height}
                 </Text>
                 <Text variant="body" tone="muted">
-                  {t('perfectsLabel')}: {run.perfects}
+                  {t("perfectsLabel")}: {run.perfects}
                 </Text>
               </View>
             </Card>
@@ -332,7 +389,7 @@ export default function Home() {
         )}
         {isPremium ? null : (
           <Text variant="caption" tone="muted">
-            {t('runsLocked', { n: FREE_RUNS })}
+            {t("runsLocked", { n: FREE_RUNS })}
           </Text>
         )}
       </ScrollView>
@@ -342,17 +399,27 @@ export default function Home() {
 }
 
 const styles = StyleSheet.create({
-  titleRow: { flexDirection: 'row', alignItems: 'center' },
+  titleRow: { flexDirection: "row", alignItems: "center" },
   grow: { flex: 1 },
   iconSlot: {
     minWidth: MIN_TOUCH_TARGET,
     minHeight: MIN_TOUCH_TARGET,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
-  field: { borderWidth: StyleSheet.hairlineWidth, justifyContent: 'center', alignItems: 'center' },
-  block: { position: 'absolute' },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap' },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: MIN_TOUCH_TARGET },
-  row: { flexDirection: 'row', alignItems: 'center' },
+  field: {
+    borderWidth: StyleSheet.hairlineWidth,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  block: { position: "absolute" },
+  gameOverBox: { borderWidth: StyleSheet.hairlineWidth * 2 },
+  chipRow: { flexDirection: "row", flexWrap: "wrap" },
+  chip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    minHeight: MIN_TOUCH_TARGET,
+  },
+  row: { flexDirection: "row", alignItems: "center" },
 });
